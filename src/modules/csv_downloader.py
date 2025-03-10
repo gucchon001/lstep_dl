@@ -77,14 +77,52 @@ class CsvDownloader:
             inflow_route.click()
             time.sleep(1)
             
-            # タグ一括追加をクリック
-            logger.info("✓ タグを一括追加")
-            add_tags = self.browser._get_element('csv', 'add_all_tags')
-            if not add_tags:
-                logger.error("❌ タグ一括追加の要素が見つかりません")
-                return False
-            add_tags.click()
-            time.sleep(3)
+            # 設定ファイルから選択するタグを取得
+            selected_tags_str = self.browser.settings.get_config_value('TAGS', 'selected_tags', default='')
+            selected_tags = [tag.strip() for tag in selected_tags_str.split(',') if tag.strip()]
+
+            if selected_tags:
+                logger.info(f"✓ 設定ファイルから {len(selected_tags)} 個のタグパターンを検索します")
+                
+                # タグリストを取得
+                tag_elements = self.browser.driver.find_elements(By.CSS_SELECTOR, 
+                    "div.group_selector li span:nth-child(2)")
+                
+                selected_count = 0
+                for tag_element in tag_elements:
+                    tag_name = tag_element.text.strip()
+                    
+                    # いずれかのパターンが含まれているかチェック
+                    for pattern in selected_tags:
+                        if pattern in tag_name:
+                            logger.info(f"✓ タグ「{tag_name}」を選択します (パターン: {pattern})")
+                            try:
+                                # 親のli要素をクリック
+                                parent_li = tag_element.find_element(By.XPATH, "./..")
+                                parent_li.click()
+                                time.sleep(0.5)
+                                selected_count += 1
+                                break  # このタグは選択したのでパターンループを抜ける
+                            except Exception as e:
+                                logger.warning(f"タグ「{tag_name}」の選択に失敗: {str(e)}")
+                
+                logger.info(f"✓ 合計 {selected_count} 個のタグを選択しました")
+                
+                # タグを選択した後、「表示中のタグを一括追加」ボタンをクリック
+                logger.info("✓ 表示中のタグを一括追加します")
+                add_tags = self.browser._get_element('csv', 'add_all_tags')
+                if not add_tags:
+                    logger.error("❌ タグ一括追加の要素が見つかりません")
+                    return False
+                add_tags.click()
+            else:
+                # タグが指定されていない場合は従来通りタグ一括追加
+                logger.info("✓ タグを一括追加")
+                add_tags = self.browser._get_element('csv', 'add_all_tags')
+                if not add_tags:
+                    logger.error("❌ タグ一括追加の要素が見つかりません")
+                    return False
+                add_tags.click()
             
             # ページ最下部までスクロール
             logger.info("📜 ページ最下部までスクロール")
