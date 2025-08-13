@@ -79,6 +79,7 @@ lib64/
 
 # Output files
 *.csv
+!config/selectors.csv
 *.xlsx
 *.xls
 *.pdf
