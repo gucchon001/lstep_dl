@@ -52,6 +52,7 @@ logs/
 *.tmp
 *.temp
 *.cache
+debug_page_source_*.html
 
 # Build and Package files
 *.pyc

@@ -1,5 +1,6 @@
 #\utils.environment.py
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Optional, Any
@@ -8,8 +9,18 @@ import configparser
 class EnvironmentUtils:
     """プロジェクト全体で使用する環境関連のユーティリティクラス"""
 
-    # プロジェクトルートのデフォルト値
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    # プロジェクトルートのデフォルト値（PyInstaller対応）
+    @staticmethod
+    def _get_base_dir():
+        """PyInstaller環境に対応したベースディレクトリの取得"""
+        if getattr(sys, 'frozen', False):
+            # PyInstaller環境の場合、一時展開ディレクトリを使用
+            return Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        else:
+            # 通常の開発環境の場合
+            return Path(__file__).resolve().parent.parent.parent
+    
+    BASE_DIR = _get_base_dir()
 
     @staticmethod
     def set_project_root(path: Path) -> None:

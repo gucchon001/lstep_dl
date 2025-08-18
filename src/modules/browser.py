@@ -63,14 +63,103 @@ class Browser:
     def _get_element(self, page, element, wait=30):
         """指定された要素を取得"""
         try:
+            logger.info(f"🔍 _get_element開始: {page}.{element} (wait={wait}秒)")
             selector = self.selectors[page][element]
+            logger.info(f"🔍 セレクタ取得: {selector}")
             by_type = getattr(By, selector['type'].upper())
-            return WebDriverWait(self.driver, wait).until(
+            logger.info(f"🔍 WebDriverWait開始: {by_type}, {selector['value']}")
+            element_found = WebDriverWait(self.driver, wait).until(
                 EC.visibility_of_element_located((by_type, selector['value']))
             )
+            logger.info(f"🔍 _get_element成功: {page}.{element}")
+            return element_found
         except Exception as e:
             logger.error(f"要素の取得に失敗: {str(e)}")
+            logger.error(f"要求されたセレクタ: {page}.{element}")
+            try:
+                logger.error(f"現在のURL: {self.driver.current_url}")
+                logger.error(f"ページタイトル: {self.driver.title}")
+            except:
+                logger.error("現在のページ情報取得失敗")
             raise
+
+    def findShadowElements(self, host_css: str, inner_css: str):
+        """
+        Shadow DOM 内の要素一覧を取得
+        
+        引数:
+            host_css (str): Shadow ホスト要素の CSS セレクタ
+            inner_css (str): Shadow Root 内部で検索する CSS セレクタ
+        戻り値:
+            list[selenium.webdriver.remote.webelement.WebElement]: 見つかった要素のリスト
+        例外:
+            例外発生時は詳細をログに出力して再送出
+        """
+        try:
+            host_element = self.driver.find_element(By.CSS_SELECTOR, host_css)
+            shadow_root = host_element.shadow_root
+            return shadow_root.find_elements(By.CSS_SELECTOR, inner_css)
+        except Exception as e:
+            logger.error(f"Shadow DOM要素一覧の取得に失敗: host='{host_css}', inner='{inner_css}', error={str(e)}")
+            raise
+
+    def waitForShadowElementsPresent(self, host_css: str, inner_css: str, wait_seconds: int = 20):
+        """
+        Shadow DOM 内で指定セレクタの要素が出現するまで待機
+        
+        引数:
+            host_css (str): Shadow ホスト要素の CSS セレクタ
+            inner_css (str): Shadow Root 内部で検索する CSS セレクタ
+            wait_seconds (int): 最大待機秒数
+        戻り値:
+            list[WebElement]: 見つかった要素一覧
+        例外:
+            Timeout 等発生時はログ出力後に再送出
+        """
+        try:
+            WebDriverWait(self.driver, wait_seconds).until(
+                lambda d: len(self.findShadowElements(host_css, inner_css)) > 0
+            )
+            return self.findShadowElements(host_css, inner_css)
+        except Exception as e:
+            logger.error(f"Shadow DOM待機に失敗: host='{host_css}', inner='{inner_css}', error={str(e)}")
+            raise
+
+    def clickShadowItemByText(self, host_css: str, inner_css: str, expected_substring: str, scroll_into_view: bool = True) -> bool:
+        """
+        Shadow DOM 内のテキスト一致要素の親LIをクリック
+        
+        引数:
+            host_css (str): Shadow ホスト要素の CSS セレクタ
+            inner_css (str): Shadow Root 内部で検索する CSS セレクタ（例: "div.itempool ul li span:nth-child(2)")
+            expected_substring (str): 含まれていれば一致とみなす部分文字列
+            scroll_into_view (bool): クリック前にスクロールするか
+        戻り値:
+            bool: クリック成功なら True
+        """
+        try:
+            candidates = self.findShadowElements(host_css, inner_css)
+            logger.info(f"🔍 Shadow内候補数: {len(candidates)} (inner='{inner_css}')")
+            for span in candidates:
+                try:
+                    text_value = (span.text or "").strip()
+                except Exception:
+                    text_value = ""
+                if expected_substring and expected_substring in text_value:
+                    parent_li = span.find_element(By.XPATH, "./..")
+                    if scroll_into_view:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", parent_li)
+                    try:
+                        parent_li.click()
+                    except Exception:
+                        self.driver.execute_script("arguments[0].click();", parent_li)
+                    logger.info(f"✓ Shadow DOM内クリック成功: '{text_value}'")
+                    return True
+            logger.warning(f"⚠ Shadow DOM内クリック対象が見つかりません: 部分文字列='{expected_substring}'")
+            return False
+        except Exception as e:
+            logger.error(f"Shadow DOM内クリックに失敗: host='{host_css}', inner='{inner_css}', text='{expected_substring}', error={str(e)}")
+            return False
 
     def setup(self):
         """ChromeDriverのセットアップ"""

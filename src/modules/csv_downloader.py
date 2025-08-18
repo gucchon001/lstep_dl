@@ -4,6 +4,8 @@ from pathlib import Path
 from ..utils.logging_config import get_logger
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from ..modules.spreadsheet import Spreadsheet
 from .log_spreadsheet import LogSpreadsheet  # 新しいインポート
 
@@ -118,25 +120,92 @@ class CsvDownloader:
                     
                     # タグを選択した後、「表示中のタグを一括追加」ボタンをクリック
                     logger.info("✓ 表示中のタグを一括追加します")
-                    # 現在のところShadow DOM内では直接セレクタを使用
-                    self.browser.clickShadowItemByText(
-                        'v3-item-selector',
-                        'div.itempool div.item_selector ul li:nth-child(1) span',
-                        '表示中のタグを一括追加します',
-                        scroll_into_view=True
-                    )
-                    time.sleep(1)  # 一括追加後の待機
+                    
+                    # 一括追加ボタンが表示されるまで待機
+                    wait = WebDriverWait(self.browser.driver, 10)
+                    host_css = 'v3-item-selector'
+                    inner_css = 'div.itempool div.item_selector ul li:nth-child(1) span'
+                    
+                    try:
+                        # ボタンの存在を確認
+                        wait.until(lambda driver: driver.execute_script(f"""
+                            var host = document.querySelector('{host_css}');
+                            var element = host && host.shadowRoot && host.shadowRoot.querySelector('{inner_css}');
+                            return element && element.textContent.includes('一括追加');
+                        """))
+                        logger.info("✓ 一括追加ボタンの存在を確認")
+                        
+                        # デバッグ情報を出力
+                        elements = self.browser.findShadowElements(host_css, inner_css)
+                        if elements:
+                            for elem in elements:
+                                logger.info(f"🔍 一括追加ボタンの候補: '{elem.text}'")
+                        
+                        # ボタンをクリック（テキストの部分一致で探索）
+                        if self.browser.clickShadowItemByText(
+                            host_css,
+                            inner_css,
+                            '一括追加',
+                            scroll_into_view=True
+                        ):
+                            logger.info("✓ 一括追加ボタンのクリックに成功")
+                        else:
+                            logger.warning("⚠ 一括追加ボタンのクリックに失敗")
+                    except Exception as e:
+                        logger.warning(f"⚠ 一括追加ボタンの待機中にエラー: {str(e)}")
+                    
+                    # クリック後の安定待機
+                    time.sleep(2)  # 待機時間を2秒に延長
             
             if not any(tags for _, tags in tag_patterns):
                 # どちらのタグパターンも指定されていない場合は従来通りタグ一括追加
                 logger.info("✓ タグを一括追加")
-                # 現在のところShadow DOM内では直接セレクタを使用
-                self.browser.clickShadowItemByText(
-                    'v3-item-selector',
-                    'div.itempool div.item_selector ul li:nth-child(1) span',
-                    '表示中のタグを一括追加します',
-                    scroll_into_view=True
-                )
+                
+                # 一括追加ボタンが表示されるまで待機
+                wait = WebDriverWait(self.browser.driver, 10)
+                host_css = 'v3-item-selector'
+                inner_css = 'div.itempool div.item_selector ul li:nth-child(1) span'
+                
+                try:
+                    # ボタンの存在を確認
+                    wait.until(lambda driver: driver.execute_script(f"""
+                        var host = document.querySelector('{host_css}');
+                        var element = host && host.shadowRoot && host.shadowRoot.querySelector('{inner_css}');
+                                                    return element && element.textContent.includes('一括追加');
+                    """))
+                    logger.info("✓ 一括追加ボタンの存在を確認")
+                    
+                    # デバッグ情報を出力
+                    elements = self.browser.findShadowElements(host_css, inner_css)
+                    if elements:
+                        for elem in elements:
+                            logger.info(f"🔍 一括追加ボタンの候補: '{elem.text}'")
+                    
+                    # ボタンをクリック（テキストの部分一致で探索）
+                    if self.browser.clickShadowItemByText(
+                        host_css,
+                        inner_css,
+                        '一括追加',
+                        scroll_into_view=True
+                    ):
+                        logger.info("✓ 一括追加ボタンのクリックに成功")
+                    else:
+                        logger.warning("⚠ 一括追加ボタンのクリックに失敗")
+                        # デバッグ情報を保存
+                        self.browser.save_debug_info("add_all_tags_click_failed")
+                except Exception as e:
+                    logger.warning(f"⚠ 一括追加ボタンの待機中にエラー: {str(e)}")
+                    # エラー時のデバッグ情報を保存
+                    self.browser.save_debug_info("add_all_tags_wait_error")
+                    # Shadow DOM内の要素を確認
+                    elements = self.browser.findShadowElements(host_css, inner_css)
+                    if elements:
+                        logger.info(f"🔍 Shadow DOM内の要素数: {len(elements)}")
+                        for i, elem in enumerate(elements):
+                            logger.info(f"  要素{i+1}: {elem.text}")
+                
+                # クリック後の安定待機
+                time.sleep(2)  # 待機時間を2秒に延長
             
             # ページ最下部までスクロール
             logger.info("📜 ページ最下部までスクロール")
@@ -162,9 +231,35 @@ class CsvDownloader:
             time.sleep(5)  # ページロード待機
             
             # ダウンロードボタンを探して操作
-            download_button = self.browser._get_element('csv', 'latest_download', wait=10)
-            download_button.click()
-            logger.info("✓ ダウンロードボタンをクリックしました")
+            logger.info("🔍 ダウンロードボタンを探索中...")
+            selector = self.browser.selectors['csv']['latest_download']
+            
+            # 要素が存在し、クリック可能になるまで待機
+            logger.info("⏳ ダウンロードボタンがクリック可能になるまで待機")
+            wait = WebDriverWait(self.browser.driver, 10)
+            download_button = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector['value']))
+            )
+            
+            # ボタンが見えるようにスクロール
+            logger.info("📜 ダウンロードボタンが見えるようにスクロール")
+            self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
+            time.sleep(1)  # スクロール完了を待機
+            
+            # 要素が完全に表示されるまで待機
+            logger.info("⏳ ダウンロードボタンが完全に表示されるまで待機")
+            wait.until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, selector['value']))
+            )
+            
+            # クリック操作（通常のクリックを試行）
+            try:
+                ActionChains(self.browser.driver).move_to_element(download_button).click().perform()
+                logger.info("✓ 通常クリックでダウンロードボタンをクリックしました")
+            except Exception as e:
+                logger.warning(f"⚠ 通常クリックに失敗、JavaScriptでクリック試行: {str(e)}")
+                self.browser.driver.execute_script("arguments[0].click();", download_button)
+                logger.info("✓ JavaScriptでダウンロードボタンをクリックしました")
             
             # ダウンロード完了を待機
             downloads_path = Path.home() / "Downloads"

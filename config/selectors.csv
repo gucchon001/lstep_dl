@@ -11,7 +11,7 @@ csv,save_name,CSVエクスポート＞保存名,input,css_selector,#csv_export_f
 csv,submit_button,CSVダウンロード＞送信ボタン,click,css_selector,#submit_button,,
 csv,latest_download,CSVエクスポート＞最新ダウンロード,click,css_selector,body > div.container-fluid.pc-body > div > div > div > div.row > div > table:nth-child(8) > tbody > tr:nth-child(1) > td:nth-child(6) > a,,
 csv,inflow_route,流入経路,click,css_selector,v3-item-selector div.itempool ul li.selected span:nth-child(2),,
-csv,add_all_tags,タグ一括追加,click,css_selector,#csv_vue_part > div:nth-child(1) > div > div > div.itempool > div > div.item_selector > ul > li:nth-child(1) > span,,
+csv,add_all_tags,タグ一括追加,click,css_selector,v3-item-selector div.itempool div.item_selector ul li:nth-child(1) span,,
 menu,questionnaire_form,回答フォーム,click,css_selector,#vue3 > div > aside > ul:nth-child(3) > li:nth-child(7) > a > div,,
 questionnaire,download_answers,回答一覧DL,click,css_selector,#item_vuelist > div.primary_list > div:nth-child(2) > div > div > div.nano-content > div > table > tbody > tr:nth-child(1) > td:nth-child(4) > span:nth-child(3) > a:nth-child(3),,
 csv,tag_list,タグリスト,find,css_selector,v3-item-selector div.itempool ul li span:nth-child(2),,
