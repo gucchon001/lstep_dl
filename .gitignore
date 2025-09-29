@@ -92,4 +92,4 @@ output/
 htmlcov/
 
 # Build
-*.spec
+# *.spec  # PyInstaller spec files are important for reproducible builds
