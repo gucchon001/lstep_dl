@@ -405,4 +405,428 @@ class CsvDownloader:
                 status="失敗",
                 error_message=error_msg
             )
+            return False
+
+    def download_carousel_survey(self):
+        """カルーセルアンケート用データのダウンロード処理"""
+        spreadsheet = Spreadsheet()
+        log_sheet = LogSpreadsheet()
+        # 処理開始時刻を記録（CSVファイル検索用）
+        process_start_time = time.time()
+        try:
+            # 友達リストをクリック
+            logger.info("📋 友達リストページに遷移します")
+            friend_list = self.browser._get_element('menu', 'friend_list')
+            if not friend_list:
+                logger.error("❌ 友達リストの要素が見つかりません")
+                return False
+            friend_list.click()
+            time.sleep(2)
+            
+            # CSV操作をクリック（スクロールしてから）
+            logger.info("📊 CSV操作メニューを開きます")
+            csv_operation = self.browser._get_element('menu', 'csv_operation')
+            if not csv_operation:
+                logger.error("❌ CSV操作メニューの要素が見つかりません")
+                return False
+            # 要素が見えるようにスクロール
+            self.browser.driver.execute_script("arguments[0].scrollIntoView(true);", csv_operation)
+            time.sleep(1)
+            # 要素をクリック
+            ActionChains(self.browser.driver).move_to_element(csv_operation).click().perform()
+            time.sleep(1)
+            
+            # CSVエクスポートをクリック
+            logger.info("📥 CSVエクスポートページに遷移します")
+            csv_export = self.browser._get_element('menu', 'csv_export_mover')
+            if not csv_export:
+                logger.error("❌ CSVエクスポートの要素が見つかりません")
+                return False
+            csv_export.click()
+            time.sleep(2)
+            
+            # チェックボックスの処理
+            logger.info("✓ チェックボックスの選択を開始")
+            checkboxes = [
+                'name', 'short_name', 'nickname', 'status_message', 'memo',
+                'created_at', 'notify', 'rate_text', 'is_blocked',
+                'last_message', 'last_message_at', 'scenario', 'scenario_time'
+            ]
+            
+            for checkbox_id in checkboxes:
+                try:
+                    checkbox = self.browser.driver.find_element(By.ID, checkbox_id)
+                    if not checkbox.is_selected():
+                        checkbox.click()
+                        time.sleep(0.5)
+                        logger.info(f"✓ チェックボックス {checkbox_id} を選択")
+                except Exception as e:
+                    logger.warning(f"チェックボックス {checkbox_id} の選択に失敗: {str(e)}")
+            
+            # カルーセルアンケート用タグを選択
+            logger.info("✓ カルーセルアンケート用タグを選択")
+            
+            # 設定からカルーセルアンケート用タグを取得
+            carousel_tag = self.browser.settings.get_config_value('CSV_EXPORTS', 'carousel_survey_tag', default='カルーセルアンケート用')
+            
+            # Shadow DOM操作でタグを選択
+            host_css = "v3-item-selector"
+            inner_css = "div.itempool ul li span:nth-child(2)"
+            self.browser.waitForShadowElementsPresent(host_css, inner_css, wait_seconds=20)
+            
+            # カルーセルアンケート用タグをクリック
+            if self.browser.clickShadowItemByText(host_css, inner_css, carousel_tag, scroll_into_view=True):
+                logger.info(f"✓ カルーセルアンケート用タグ「{carousel_tag}」を選択しました")
+            else:
+                logger.warning(f"⚠ カルーセルアンケート用タグ「{carousel_tag}」が見つかりませんでした")
+                return False
+            
+            # 一括追加ボタンをクリック
+            logger.info("✓ 表示中のタグを一括追加します")
+            wait = WebDriverWait(self.browser.driver, 10)
+            inner_css = 'div.itempool div.item_selector ul li:nth-child(1) span'
+            
+            try:
+                wait.until(lambda driver: driver.execute_script(f"""
+                    var host = document.querySelector('{host_css}');
+                    var element = host && host.shadowRoot && host.shadowRoot.querySelector('{inner_css}');
+                    return element && element.textContent.includes('一括追加');
+                """))
+                
+                if self.browser.clickShadowItemByText(host_css, inner_css, '一括追加', scroll_into_view=True):
+                    logger.info("✓ 一括追加ボタンのクリックに成功")
+                else:
+                    logger.warning("⚠ 一括追加ボタンのクリックに失敗")
+            except Exception as e:
+                logger.warning(f"⚠ 一括追加ボタンの待機中にエラー: {str(e)}")
+            
+            time.sleep(2)
+            
+            # ページ最下部までスクロール
+            logger.info("📜 ページ最下部までスクロール")
+            self.browser.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            
+            # 送信ボタンをクリック
+            logger.info("🔘 送信ボタンのクリックを試行")
+            submit_button = self.browser._get_element('csv', 'submit_button')
+            self.browser.driver.execute_script("arguments[0].scrollIntoView(true);", submit_button)
+            time.sleep(1)
+            self.browser.driver.execute_script("arguments[0].click();", submit_button)
+            logger.info("✓ CSVエクスポートを開始しました")
+            
+            # エクスポート完了まで待機（3分）
+            logger.info("⏳ エクスポート完了を3分間待機します...")
+            time.sleep(180)
+            
+            # ダウンロードボタンのクリック
+            logger.info("📥 最新のCSVファイルのダウンロードを試みます")
+            self.browser.driver.refresh()
+            time.sleep(5)
+            
+            # ダウンロードボタンを探して操作
+            logger.info("🔍 ダウンロードボタンを探索中...")
+            selector = self.browser.selectors['csv']['latest_download']
+            
+            wait = WebDriverWait(self.browser.driver, 10)
+            download_button = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector['value']))
+            )
+            
+            self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
+            time.sleep(1)
+            
+            try:
+                ActionChains(self.browser.driver).move_to_element(download_button).click().perform()
+                logger.info("✓ 通常クリックでダウンロードボタンをクリックしました")
+            except Exception as e:
+                logger.warning(f"⚠ 通常クリックに失敗、JavaScriptでクリック試行: {str(e)}")
+                self.browser.driver.execute_script("arguments[0].click();", download_button)
+                logger.info("✓ JavaScriptでダウンロードボタンをクリックしました")
+            
+            # ダウンロード完了を待機
+            downloads_path = Path.home() / "Downloads"
+            base_pattern = "member_*.csv"
+            
+            logger.info("⏳ CSVファイルのダウンロード完了を待機中...")
+            for _ in range(12):  # 最大60秒待機
+                time.sleep(5)
+                csv_files = list(downloads_path.glob(base_pattern))
+                
+                if csv_files:
+                    # 処理開始時刻以降に作成されたファイルのみを対象
+                    recent_files = [f for f in csv_files if f.stat().st_mtime >= process_start_time]
+                    if recent_files:
+                        latest_csv = max(recent_files, key=lambda x: x.stat().st_mtime)
+                        if time.time() - latest_csv.stat().st_mtime < 5:
+                            logger.info(f"✓ 新しいカルーセルアンケートCSVファイルを検出: {latest_csv.name}")
+                        
+                        # スプレッドシートに転記
+                        logger.info("📊 カルーセルアンケートデータをスプレッドシートに転記します")
+                        if spreadsheet.update_sheet(str(latest_csv), sheet_type='carousel_survey'):
+                            logger.info("✅ カルーセルアンケートデータの転記が完了しました")
+                            
+                            # CSVファイルの削除
+                            try:
+                                latest_csv.unlink()
+                                logger.info(f"✓ CSVファイルを削除しました: {latest_csv.name}")
+                            except Exception as e:
+                                logger.warning(f"CSVファイルの削除に失敗: {str(e)}")
+                            
+                            # 成功時のログ記録
+                            log_sheet.log_operation(
+                                operation_type="カルーセルアンケートデータダウンロード",
+                                status="成功",
+                                error_message=None
+                            )
+                            return True
+                        else:
+                            error_msg = "カルーセルアンケートデータの転記に失敗しました"
+                            logger.error(f"❌ {error_msg}")
+                            # エラーログを記録
+                            log_sheet.log_operation(
+                                operation_type="カルーセルアンケートデータダウンロード",
+                                status="失敗",
+                                error_message=error_msg
+                            )
+                            return False
+            
+            error_msg = "カルーセルアンケートCSVファイルのダウンロードがタイムアウトしました"
+            logger.error(f"❌ {error_msg}")
+            # エラーログを記録
+            log_sheet.log_operation(
+                operation_type="カルーセルアンケートデータダウンロード",
+                status="失敗",
+                error_message=error_msg
+            )
+            return False
+                
+        except Exception as e:
+            error_msg = f"カルーセルアンケートデータのダウンロードでエラー: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            # エラーログを記録
+            log_sheet.log_operation(
+                operation_type="カルーセルアンケートデータダウンロード",
+                status="失敗",
+                error_message=error_msg
+            )
+            return False
+
+    def download_ag_tag_data(self):
+        """AGタグデータのダウンロード処理"""
+        spreadsheet = Spreadsheet()
+        log_sheet = LogSpreadsheet()
+        # 処理開始時刻を記録（CSVファイル検索用）
+        process_start_time = time.time()
+        try:
+            # 友達リストをクリック
+            logger.info("📋 友達リストページに遷移します")
+            friend_list = self.browser._get_element('menu', 'friend_list')
+            if not friend_list:
+                logger.error("❌ 友達リストの要素が見つかりません")
+                return False
+            friend_list.click()
+            time.sleep(2)
+            
+            # CSV操作をクリック（スクロールしてから）
+            logger.info("📊 CSV操作メニューを開きます")
+            csv_operation = self.browser._get_element('menu', 'csv_operation')
+            if not csv_operation:
+                logger.error("❌ CSV操作メニューの要素が見つかりません")
+                return False
+            # 要素が見えるようにスクロール
+            self.browser.driver.execute_script("arguments[0].scrollIntoView(true);", csv_operation)
+            time.sleep(1)
+            # 要素をクリック
+            ActionChains(self.browser.driver).move_to_element(csv_operation).click().perform()
+            time.sleep(1)
+            
+            # CSVエクスポートをクリック
+            logger.info("📥 CSVエクスポートページに遷移します")
+            csv_export = self.browser._get_element('menu', 'csv_export_mover')
+            if not csv_export:
+                logger.error("❌ CSVエクスポートの要素が見つかりません")
+                return False
+            csv_export.click()
+            time.sleep(2)
+            
+            # チェックボックスの処理
+            logger.info("✓ チェックボックスの選択を開始")
+            checkboxes = [
+                'name', 'short_name', 'nickname', 'status_message', 'memo',
+                'created_at', 'notify', 'rate_text', 'is_blocked',
+                'last_message', 'last_message_at', 'scenario', 'scenario_time'
+            ]
+            
+            for checkbox_id in checkboxes:
+                try:
+                    checkbox = self.browser.driver.find_element(By.ID, checkbox_id)
+                    if not checkbox.is_selected():
+                        checkbox.click()
+                        time.sleep(0.5)
+                        logger.info(f"✓ チェックボックス {checkbox_id} を選択")
+                except Exception as e:
+                    logger.warning(f"チェックボックス {checkbox_id} の選択に失敗: {str(e)}")
+            
+            # エージェント別タグを選択
+            logger.info("✓ エージェント別タグを選択")
+            
+            # 設定からAGタグを取得
+            ag_tag_tags_str = self.browser.settings.get_config_value('CSV_EXPORTS', 'ag_tag_tags', default='')
+            ag_tag_tags = [tag.strip() for tag in ag_tag_tags_str.split(',') if tag.strip()]
+            
+            if not ag_tag_tags:
+                logger.error("❌ AGタグの設定が見つかりません")
+                return False
+            
+            # Shadow DOM操作でタグを選択
+            host_css = "v3-item-selector"
+            inner_css = "div.itempool ul li span:nth-child(2)"
+            self.browser.waitForShadowElementsPresent(host_css, inner_css, wait_seconds=20)
+            
+            # 各AGタグをクリック
+            selected_count = 0
+            for ag_tag in ag_tag_tags:
+                logger.info(f"✓ AGタグ「{ag_tag}」を選択します")
+                if self.browser.clickShadowItemByText(host_css, inner_css, ag_tag, scroll_into_view=True):
+                    selected_count += 1
+                    logger.info(f"✓ AGタグ「{ag_tag}」の選択に成功")
+                else:
+                    logger.warning(f"⚠ AGタグ「{ag_tag}」が見つかりませんでした")
+            
+            if selected_count == 0:
+                logger.error("❌ AGタグが一つも選択できませんでした")
+                return False
+            
+            logger.info(f"✓ 合計 {selected_count} 個のAGタグを選択しました")
+            
+            # 一括追加ボタンをクリック
+            logger.info("✓ 表示中のタグを一括追加します")
+            wait = WebDriverWait(self.browser.driver, 10)
+            inner_css = 'div.itempool div.item_selector ul li:nth-child(1) span'
+            
+            try:
+                wait.until(lambda driver: driver.execute_script(f"""
+                    var host = document.querySelector('{host_css}');
+                    var element = host && host.shadowRoot && host.shadowRoot.querySelector('{inner_css}');
+                    return element && element.textContent.includes('一括追加');
+                """))
+                
+                if self.browser.clickShadowItemByText(host_css, inner_css, '一括追加', scroll_into_view=True):
+                    logger.info("✓ 一括追加ボタンのクリックに成功")
+                else:
+                    logger.warning("⚠ 一括追加ボタンのクリックに失敗")
+            except Exception as e:
+                logger.warning(f"⚠ 一括追加ボタンの待機中にエラー: {str(e)}")
+            
+            time.sleep(2)
+            
+            # ページ最下部までスクロール
+            logger.info("📜 ページ最下部までスクロール")
+            self.browser.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            
+            # 送信ボタンをクリック
+            logger.info("🔘 送信ボタンのクリックを試行")
+            submit_button = self.browser._get_element('csv', 'submit_button')
+            self.browser.driver.execute_script("arguments[0].scrollIntoView(true);", submit_button)
+            time.sleep(1)
+            self.browser.driver.execute_script("arguments[0].click();", submit_button)
+            logger.info("✓ CSVエクスポートを開始しました")
+            
+            # エクスポート完了まで待機（3分）
+            logger.info("⏳ エクスポート完了を3分間待機します...")
+            time.sleep(180)
+            
+            # ダウンロードボタンのクリック
+            logger.info("📥 最新のCSVファイルのダウンロードを試みます")
+            self.browser.driver.refresh()
+            time.sleep(5)
+            
+            # ダウンロードボタンを探して操作
+            logger.info("🔍 ダウンロードボタンを探索中...")
+            selector = self.browser.selectors['csv']['latest_download']
+            
+            wait = WebDriverWait(self.browser.driver, 10)
+            download_button = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector['value']))
+            )
+            
+            self.browser.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_button)
+            time.sleep(1)
+            
+            try:
+                ActionChains(self.browser.driver).move_to_element(download_button).click().perform()
+                logger.info("✓ 通常クリックでダウンロードボタンをクリックしました")
+            except Exception as e:
+                logger.warning(f"⚠ 通常クリックに失敗、JavaScriptでクリック試行: {str(e)}")
+                self.browser.driver.execute_script("arguments[0].click();", download_button)
+                logger.info("✓ JavaScriptでダウンロードボタンをクリックしました")
+            
+            # ダウンロード完了を待機
+            downloads_path = Path.home() / "Downloads"
+            base_pattern = "member_*.csv"
+            
+            logger.info("⏳ CSVファイルのダウンロード完了を待機中...")
+            for _ in range(12):  # 最大60秒待機
+                time.sleep(5)
+                csv_files = list(downloads_path.glob(base_pattern))
+                
+                if csv_files:
+                    # 処理開始時刻以降に作成されたファイルのみを対象
+                    recent_files = [f for f in csv_files if f.stat().st_mtime >= process_start_time]
+                    if recent_files:
+                        latest_csv = max(recent_files, key=lambda x: x.stat().st_mtime)
+                        if time.time() - latest_csv.stat().st_mtime < 5:
+                            logger.info(f"✓ 新しいAGタグCSVファイルを検出: {latest_csv.name}")
+                        
+                        # スプレッドシートに転記
+                        logger.info("📊 AGタグデータをスプレッドシートに転記します")
+                        if spreadsheet.update_sheet(str(latest_csv), sheet_type='ag_tag'):
+                            logger.info("✅ AGタグデータの転記が完了しました")
+                            
+                            # CSVファイルの削除
+                            try:
+                                latest_csv.unlink()
+                                logger.info(f"✓ CSVファイルを削除しました: {latest_csv.name}")
+                            except Exception as e:
+                                logger.warning(f"CSVファイルの削除に失敗: {str(e)}")
+                            
+                            # 成功時のログ記録
+                            log_sheet.log_operation(
+                                operation_type="AGタグデータダウンロード",
+                                status="成功",
+                                error_message=None
+                            )
+                            return True
+                        else:
+                            error_msg = "AGタグデータの転記に失敗しました"
+                            logger.error(f"❌ {error_msg}")
+                            # エラーログを記録
+                            log_sheet.log_operation(
+                                operation_type="AGタグデータダウンロード",
+                                status="失敗",
+                                error_message=error_msg
+                            )
+                            return False
+            
+            error_msg = "AGタグCSVファイルのダウンロードがタイムアウトしました"
+            logger.error(f"❌ {error_msg}")
+            # エラーログを記録
+            log_sheet.log_operation(
+                operation_type="AGタグデータダウンロード",
+                status="失敗",
+                error_message=error_msg
+            )
+            return False
+                
+        except Exception as e:
+            error_msg = f"AGタグデータのダウンロードでエラー: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            # エラーログを記録
+            log_sheet.log_operation(
+                operation_type="AGタグデータダウンロード",
+                status="失敗",
+                error_message=error_msg
+            )
             return False 

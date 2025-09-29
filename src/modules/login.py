@@ -58,8 +58,8 @@ class Login:
             logger.info("✓ パスワードを入力: ********")
             time.sleep(1)
 
-            logger.info("⚠️ reCAPTCHA認証を待機中...")
-            print("\n⚠️ reCAPTCHA認証を手動で完了し、ログインボタンをクリックしてください")
+            logger.info("reCAPTCHA認証を待機中...")
+            print("\nreCAPTCHA認証を手動で完了し、ログインボタンをクリックしてください")
             
             # URLの変更を監視
             current_url = self.browser.driver.current_url

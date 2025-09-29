@@ -19,11 +19,15 @@ class Spreadsheet:
         # シート名の設定を読み込む
         self.friend_data_key = env.get_config_value('SHEET_NAMES', 'FRIEND_DATA')  # "友達リストDLデータ"
         self.anq_data_key = env.get_config_value('SHEET_NAMES', 'ANQ_DATA')  # "アンケートDLデータ"
+        self.carousel_survey_key = env.get_config_value('SHEET_NAMES', 'CAROUSEL_SURVEY_DATA')  # "配信タグ_data"
+        self.ag_tag_key = env.get_config_value('SHEET_NAMES', 'AG_TAG_DATA')  # "AGタグ_data"
         self.log_sheet_name = 'logsheet'  # ハードコーディング
         
         # スプレッドシートから実際のシート名を取得
         self.friend_sheet_name = None
         self.anq_sheet_name = None
+        self.carousel_survey_sheet_name = None
+        self.ag_tag_sheet_name = None
         self._load_sheet_settings()
         
     def _get_credentials(self):
@@ -59,6 +63,8 @@ class Spreadsheet:
             # settings.iniの設定値をキーとして使用
             self.friend_sheet_name = settings.get(self.friend_data_key.strip('"'))  # クォートを除去
             self.anq_sheet_name = settings.get(self.anq_data_key.strip('"'))  # クォートを除去
+            self.carousel_survey_sheet_name = settings.get(self.carousel_survey_key.strip('"'))  # クォートを除去
+            self.ag_tag_sheet_name = settings.get(self.ag_tag_key.strip('"'))  # クォートを除去
             
             if not self.friend_sheet_name or not self.anq_sheet_name:
                 logger.error("❌ 必要なシート名の設定が見つかりません")
@@ -66,7 +72,13 @@ class Spreadsheet:
                 logger.error(f"アンケートDLデータのキー: {self.anq_data_key}")
                 raise ValueError("Required sheet names not found in settings")
             
-            logger.info(f"✓ シート名の設定を読み込みました（友達: {self.friend_sheet_name}, アンケート: {self.anq_sheet_name}）")
+            # 新機能のシート名はオプション（settingsシートに追加されていない場合は警告のみ）
+            if not self.carousel_survey_sheet_name:
+                logger.warning(f"⚠️ 配信タグDLデータのシート名が見つかりません: {self.carousel_survey_key}")
+            if not self.ag_tag_sheet_name:
+                logger.warning(f"⚠️ AGタグDLデータのシート名が見つかりません: {self.ag_tag_key}")
+            
+            logger.info(f"✓ シート名の設定を読み込みました（友達: {self.friend_sheet_name}, アンケート: {self.anq_sheet_name}, 配信タグ: {self.carousel_survey_sheet_name}, AGタグ: {self.ag_tag_sheet_name}）")
             
         except Exception as e:
             logger.error(f"❌ シート名の設定読み込みに失敗: {str(e)}")
@@ -78,7 +90,14 @@ class Spreadsheet:
             logger.info(f"📊 CSVファイルの読み込みを開始: {csv_path}")
             
             # シートタイプに応じてシート名を設定
-            self.sheet_name = self.anq_sheet_name if sheet_type == 'anq_data' else self.friend_sheet_name
+            if sheet_type == 'anq_data':
+                self.sheet_name = self.anq_sheet_name
+            elif sheet_type == 'carousel_survey':
+                self.sheet_name = self.carousel_survey_sheet_name
+            elif sheet_type == 'ag_tag':
+                self.sheet_name = self.ag_tag_sheet_name
+            else:
+                self.sheet_name = self.friend_sheet_name  # デフォルトは友達リスト
             logger.info(f"📝 転記先シート: {self.sheet_name}")
             
             # CSVファイルを読み込み（Windows向けにcp932エンコーディングを指定）

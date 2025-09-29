@@ -1,6 +1,7 @@
 import time
 import os
 import logging
+import argparse
 from pathlib import Path
 import sys
 
@@ -50,6 +51,15 @@ def setup_configurations():
 
 def main():
     """メイン処理"""
+    # コマンドライン引数の解析
+    parser = argparse.ArgumentParser(description='L-step データダウンロード自動化システム')
+    parser.add_argument('--carousel-only', action='store_true', help='配信タグデータのみ実行')
+    parser.add_argument('--ag-tag-only', action='store_true', help='AGタグデータのみ実行')
+    parser.add_argument('--friend-only', action='store_true', help='友達リストデータのみ実行')
+    parser.add_argument('--questionnaire-only', action='store_true', help='アンケートデータのみ実行')
+    
+    args = parser.parse_args()
+    
     try:
         logger.info("プログラムを開始します")
         
@@ -65,37 +75,92 @@ def main():
         login = Login(browser)
         if not login.execute():
             logger.error("ログインに失敗しました")
-            print("❌ ログイン失敗")
+            print("ログイン失敗")
             return
 
         logger.info("ログインに成功しました")
-        print("✅ ログイン成功")
+        print("[SUCCESS] ログイン成功")
 
         # CSVダウンローダーの初期化
         csv_downloader = CsvDownloader(browser)
 
-        # 1. アンケートデータのダウンロードとスプレッドシート更新
-        logger.info("📊 アンケートデータの処理を開始します")
-        if not csv_downloader.download_questionnaire():
-            logger.error("アンケートデータの処理に失敗しました")
-            print("❌ アンケートデータの処理失敗")
-            return
-        print("✅ アンケートデータの処理成功")
+        # 個別実行の判定
+        if args.carousel_only:
+            # 配信タグデータのみ実行
+            logger.info("[DATA] 配信タグデータの処理を開始します")
+            if not csv_downloader.download_carousel_survey():
+                logger.error("配信タグデータの処理に失敗しました")
+                print("[ERROR] 配信タグデータの処理失敗")
+                return
+            print("[SUCCESS] 配信タグデータの処理成功")
+            
+        elif args.ag_tag_only:
+            # AGタグデータのみ実行
+            logger.info("[DATA] AGタグデータの処理を開始します")
+            if not csv_downloader.download_ag_tag_data():
+                logger.error("AGタグデータの処理に失敗しました")
+                print("[ERROR] AGタグデータの処理失敗")
+                return
+            print("[SUCCESS] AGタグデータの処理成功")
+            
+        elif args.friend_only:
+            # 友達リストデータのみ実行
+            logger.info("[DATA] 会員データの処理を開始します")
+            if not csv_downloader.execute():
+                logger.error("会員データの処理に失敗しました")
+                print("[ERROR] 会員データの処理失敗")
+                return
+            print("[SUCCESS] 会員データの処理成功")
+            
+        elif args.questionnaire_only:
+            # アンケートデータのみ実行
+            logger.info("[DATA] アンケートデータの処理を開始します")
+            if not csv_downloader.download_questionnaire():
+                logger.error("アンケートデータの処理に失敗しました")
+                print("[ERROR] アンケートデータの処理失敗")
+                return
+            print("[SUCCESS] アンケートデータの処理成功")
+            
+        else:
+            # 全機能実行（デフォルト）
+            # 1. アンケートデータのダウンロードとスプレッドシート更新
+            logger.info("[DATA] アンケートデータの処理を開始します")
+            if not csv_downloader.download_questionnaire():
+                logger.error("アンケートデータの処理に失敗しました")
+                print("[ERROR] アンケートデータの処理失敗")
+                return
+            print("[SUCCESS] アンケートデータの処理成功")
 
-        # 2. 会員データのダウンロードとスプレッドシート更新
-        logger.info("📊 会員データの処理を開始します")
-        if not csv_downloader.execute():
-            logger.error("会員データの処理に失敗しました")
-            print("❌ 会員データの処理失敗")
-            return
-        print("✅ 会員データの処理成功")
+            # 2. 会員データのダウンロードとスプレッドシート更新
+            logger.info("[DATA] 会員データの処理を開始します")
+            if not csv_downloader.execute():
+                logger.error("会員データの処理に失敗しました")
+                print("[ERROR] 会員データの処理失敗")
+                return
+            print("[SUCCESS] 会員データの処理成功")
 
-        logger.info("✨ 全ての処理が完了しました")
-        print("✨ 処理完了")
+            # 3. 配信タグデータのダウンロードとスプレッドシート更新
+            logger.info("[DATA] 配信タグデータの処理を開始します")
+            if not csv_downloader.download_carousel_survey():
+                logger.error("配信タグデータの処理に失敗しました")
+                print("[ERROR] 配信タグデータの処理失敗")
+                return
+            print("[SUCCESS] 配信タグデータの処理成功")
+
+            # 4. AGタグデータのダウンロードとスプレッドシート更新
+            logger.info("[DATA] AGタグデータの処理を開始します")
+            if not csv_downloader.download_ag_tag_data():
+                logger.error("AGタグデータの処理に失敗しました")
+                print("[ERROR] AGタグデータの処理失敗")
+                return
+            print("[SUCCESS] AGタグデータの処理成功")
+
+        logger.info("[COMPLETE] 全ての処理が完了しました")
+        print("[COMPLETE] 処理完了")
 
     except Exception as e:
         logger.error(f"予期せぬエラーが発生しました: {str(e)}")
-        print(f"❌ エラー: {str(e)}")
+        print(f"[ERROR] エラー: {str(e)}")
     finally:
         # ブラウザを終了
         if 'browser' in locals():
