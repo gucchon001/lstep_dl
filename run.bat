@@ -19,7 +19,7 @@ if exist "%VENV_PATH%\Scripts\activate.bat" (
 )
 
 REM モジュールを実行
-echo [INFO] モジュールを実行しています: %MODULE_NAME%
+echo [INFO] モジュールを実行しています
 python -m %MODULE_NAME%
 if errorlevel 1 (
     echo [ERROR] モジュールの実行中にエラーが発生しました。

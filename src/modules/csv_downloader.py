@@ -331,19 +331,34 @@ class CsvDownloader:
         spreadsheet = Spreadsheet()
         log_sheet = LogSpreadsheet()
         try:
+            # ログイン後、ページが完全に読み込まれるまで待機
+            logger.info("ページの読み込み完了を待機中...")
+            time.sleep(5)
+
+            # メニューが表示されるまで待機
+            logger.info("メニューの表示を待機中...")
+            # メニューコンテナが表示されるまで待機
+            try:
+                WebDriverWait(self.browser.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "#vue3 > div > div > aside"))
+                )
+                logger.info("メニューコンテナが表示されました")
+            except Exception as e:
+                logger.warning(f"メニューコンテナの待機中にエラー: {str(e)}")
+
             # 回答フォームをクリック
-            logger.info("�� 回答フォームページに遷移します")
+            logger.info("[DATA] 回答フォームページに遷移します")
             questionnaire_link = self.browser._get_element('menu', 'questionnaire_form')
             questionnaire_link.click()
             time.sleep(3)
             
             # 回答一覧DLをクリック
-            logger.info("📥 回答一覧をダウンロードします")
+            logger.info("[DATA] 回答一覧をダウンロードします")
             download_link = self.browser._get_element('questionnaire', 'download_answers')
             download_link.click()
             
             # ダウンロード完了を待機
-            logger.info("⏳ ダウンロード完了を待機中...")
+            logger.info("[WAIT] ダウンロード完了を待機中...")
             downloads_path = Path.home() / "Downloads"
             base_pattern = "LINE登録時初回アンケート_*回答_*.csv"
             
@@ -354,17 +369,17 @@ class CsvDownloader:
                 if csv_files:
                     latest_csv = max(csv_files, key=lambda x: x.stat().st_mtime)
                     if time.time() - latest_csv.stat().st_mtime < 5:
-                        logger.info(f"✓ 新しいアンケートCSVファイルを検出: {latest_csv.name}")
+                        logger.info(f"[SUCCESS] 新しいアンケートCSVファイルを検出: {latest_csv.name}")
                         
                         # スプレッドシートに転記
-                        logger.info("📊 アンケートデータをスプレッドシートに転記します")
+                        logger.info("[DATA] アンケートデータをスプレッドシートに転記します")
                         if spreadsheet.update_sheet(str(latest_csv), sheet_type='anq_data'):
-                            logger.info("✅ アンケートデータの転記が完了しました")
+                            logger.info("[SUCCESS] アンケートデータの転記が完了しました")
                             
                             # CSVファイルの削除
                             try:
                                 latest_csv.unlink()
-                                logger.info(f"✓ CSVファイルを削除しました: {latest_csv.name}")
+                                logger.info(f"[SUCCESS] CSVファイルを削除しました: {latest_csv.name}")
                             except Exception as e:
                                 logger.warning(f"CSVファイルの削除に失敗: {str(e)}")
                             
@@ -377,7 +392,7 @@ class CsvDownloader:
                             return True
                         else:
                             error_msg = "アンケートデータの転記に失敗しました"
-                            logger.error(f"❌ {error_msg}")
+                            logger.error(f"[ERROR] {error_msg}")
                             # エラーログを記録
                             log_sheet.log_operation(
                                 operation_type="アンケートデータダウンロード",
@@ -387,7 +402,7 @@ class CsvDownloader:
                             return False
             
             error_msg = "アンケートCSVファイルのダウンロードがタイムアウトしました"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
             # エラーログを記録
             log_sheet.log_operation(
                 operation_type="アンケートデータダウンロード",
@@ -398,7 +413,16 @@ class CsvDownloader:
                 
         except Exception as e:
             error_msg = f"アンケートデータのダウンロードでエラー: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
+            # 現在のページ情報をログに記録
+            try:
+                logger.error(f"[DEBUG] 現在のURL: {self.browser.driver.current_url}")
+                logger.error(f"[DEBUG] ページタイトル: {self.browser.driver.title}")
+                # ページソースの一部をログに記録（デバッグ用）
+                page_source = self.browser.driver.page_source[:1000]
+                logger.debug(f"[DEBUG] ページソース（最初の1000文字）: {page_source}")
+            except Exception as debug_e:
+                logger.error(f"[DEBUG] ページ情報の取得に失敗: {str(debug_e)}")
             # エラーログを記録
             log_sheet.log_operation(
                 operation_type="アンケートデータダウンロード",
